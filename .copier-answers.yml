@@ -1,0 +1,11 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 2023.08.03
+_src_path: gh:scientific-python/cookie
+backend: hatch
+email: jeendgararyaman@gmail.com
+full_name: Aryaman Jeendgar
+license: MIT
+org: aryamanjeendgar
+project_name: UHI-serialization
+project_short_description: An implementation of the UHI serialization format
+url: https://github.com/aryamanjeendgar/UHI-serialization
