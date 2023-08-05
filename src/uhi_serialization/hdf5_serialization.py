@@ -17,16 +17,17 @@ class uhi_hdf5_writer():
         #TODO: grab names of histogram objects
         op_name = 'take_attribute_from_hist'
         f = h5py.File(op_name, 'w')
-        # All referenced objects will be stored inside of /storage
-        f.create_group('storage')
+        # All referenced objects will be stored inside of /ref_storage
+        f.create_group('ref_storage')
 
         """
         `metadata` code start
         """
         f.create_group('metadata')
         f['/metadata'].attrs['description'] = "Arbitrary metadata dictionary."
-        for (key, value) in self._histogram.metadata.items():
-            f['/metadata'].attrs[key] = value
+        if self._histogram.metadata is not None:
+            for (key, value) in self._histogram.metadata.items():
+                f['/metadata'].attrs[key] = value
         """
         `metadata` code end
         """
@@ -47,8 +48,8 @@ class uhi_hdf5_writer():
         }
         for i, axis in enumerate(self._histogram.axes):
             tmp_axis = axes_dict[str(axis)[: str(axis).index('(')]]
-            axes_path = '/storage/{}_{}'.format(tmp_axis, i)
-            f['/storage'].create_group('{}_{}'.format(tmp_axis, i))
+            axes_path = '/ref_storage/{}_{}'.format(tmp_axis, i)
+            f['/ref_storage'].create_group('{}_{}'.format(tmp_axis, i))
         """
         `axes` code end
         """
@@ -57,7 +58,7 @@ class uhi_hdf5_writer():
         `storage` code start
         """
         f.create_group('storage')
-        f['/group'].attrs['description'] = "The storage of the bins of the histogram."
+        f['/storage'].attrs['description'] = "The storage of the bins of the histogram."
         """
         `storage` code end
         """
