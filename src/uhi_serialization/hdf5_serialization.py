@@ -155,8 +155,8 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
                     'axis_{}'.format(axis_num))
     match axis_type:
         case "regular":
-            # ref = hist_folder_storage['axis_{}'.format(axis_num)]
             ref.attrs['type'] = axis_type
+            ref.attrs['description'] = "An evenly spaced set of continuous bins."
             ref.attrs['bins'] = args[0]
             ref.attrs['lower'] = args[1]
             ref.attrs['upper'] = args[2]
@@ -169,6 +169,7 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
                     ref['/metadata'].attrs[key] = value
         case "variable":
             ref.attrs['type'] = axis_type
+            ref.attrs['description'] = "A variably spaced set of continuous bins."
             #HACK: requires `Variable` data is passed in as a
             # numpy array
             ref.create_dataset('axis_{}_edges'.format(axis_num),
@@ -178,14 +179,39 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
             ref.attrs['circular'] = args[3]
             if has_metadata:
                 ref.create_group('metadata')
-                for (key, value) in args[3].items():
+                for (key, value) in args[4].items():
                     ref['/metadata'].attrs[key] = value
         case "boolean":
-            pass
+            ref.attrs['type'] = axis_type
+            ref.attrs['description'] = "A simple true/false axis with no flow."
+            if has_metadata:
+                ref.create_group('metadata')
+                for (key, value) in args[0].items():
+                    ref['/metadata'].attrs[key] = value
         case "str_category":
-            pass
+            ref.attrs['type'] = axis_type
+            ref.attrs['description'] = "A set of string categorical bins."
+            #HACK: Assumes that the input is a numpy array of strings
+            # This is typically imposed via `dtype=object`
+            ref.create_dataset('axis_{}_categories'.format(axis_num),
+                               shape=args[0].shape, data=args[0])
+            ref.attrs['flow'] = args[1]
+            if has_metadata:
+                ref.create_group('metadata')
+                for (key, value) in args[2].items():
+                    ref['/metadata'].attrs[key] = value
         case "int_category":
-            pass
+            ref.attrs['type'] = axis_type
+            ref.attrs['description'] = "A set of string categorical bins."
+            #HACK: Assumes that the input is a numpy array of strings
+            # This is typically imposed via `dtype=object`
+            ref.create_dataset('axis_{}_categories'.format(axis_num),
+                               shape=args[0].shape, data=args[0])
+            ref.attrs['flow'] = args[1]
+            if has_metadata:
+                ref.create_group('metadata')
+                for (key, value) in args[2].items():
+                    ref['/metadata'].attrs[key] = value
     return hdf5_ptr
 
 def read_hdf5_schema(input_file: h5py.File | Path) -> bh.Histogram:
