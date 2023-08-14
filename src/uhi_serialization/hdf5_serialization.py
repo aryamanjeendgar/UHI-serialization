@@ -11,95 +11,6 @@ CONSTS = {
             "IntCategory": 'category_int',
             "StrCategory": 'category_str',
             "Boolean": 'boolean'
-    },
-    'axes_dict_to_props': {
-            'regular': {
-                "type": { "type": "string", "const": "regular" },
-                "lower": { "type": "number", "description": "Lower edge of the axis." },
-                "upper": { "type": "number", "description": "Upper edge of the axis." },
-                "bins": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": "Number of bins in the axis."
-                },
-                "underflow": {
-                    "type": "boolean",
-                    "description": "True if there is a bin for underflow."
-                },
-                "overflow": {
-                    "type": "boolean",
-                    "description": "True if there is a bin for overflow."
-                },
-                "circular": {
-                    "type": "boolean",
-                    "description": "True if the axis wraps around."
-                },
-                "metadata": {
-                    "type": "object",
-                    "description": "Arbitrary metadata dictionary."
-                }
-            },
-            'variable': {
-                "type": { "type": "string", "const": "variable" },
-                "edges": {
-                    "oneOf": [
-                        {
-                        "type": "array",
-                        "items": { "type": "number", "minItems": 2, "uniqueItems": True}
-                        },
-                        {
-                        "type": "string",
-                        "description": "A path (URI?) to the edges data."
-                        }
-                    ]
-                },
-                "underflow": { "type": "boolean" },
-                "overflow": { "type": "boolean" },
-                "circular": { "type": "boolean" },
-                "metadata": {
-                    "type": "object",
-                    "description": "Arbitrary metadata dictionary."
-                }
-            },
-            'category_str': {
-                "type": { "type": "string", "const": "category_str" },
-                "categories": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "uniqueItems": True
-                },
-                "flow": {
-                    "type": "boolean",
-                    "description": "True if flow bin (at the overflow position) present."
-                },
-                "metadata": {
-                    "type": "object",
-                    "description": "Arbitrary metadata dictionary."
-                }
-            },
-            'category_int': {
-                "type": { "type": "string", "const": "category_int" },
-                "categories": {
-                    "type": "array",
-                    "items": { "type": "integer" },
-                    "uniqueItems": True
-                },
-                "flow": {
-                    "type": "boolean",
-                    "description": "True if flow bin (at the overflow position) present."
-                },
-                "metadata": {
-                    "type": "object",
-                    "description": "Arbitrary metadata dictionary."
-                }
-            },
-            'boolean': {
-                "type": { "type": "string", "const": "boolean" },
-                "metadata": {
-                    "type": "object",
-                    "description": "Arbitrary metadata dictionary."
-                }
-            }
     }
 }
 
@@ -176,8 +87,6 @@ def write_hdf5_schema(file_name, histograms: dict[str, bh.Histogram]) -> h5py.Fi
                         create_axes_object(current_axis, f, name, i, True, args_dict)
                     else:
                         create_axes_object(current_axis, f, name, i, False, args_dict)
-            axes_path = group_prefix + '/ref_storage/{}_{}'.format(current_axis, i)
-            f[group_prefix + '/ref_storage'].create_group('{}_{}'.format(current_axis, i))
         """
         `axes` code end
         """
