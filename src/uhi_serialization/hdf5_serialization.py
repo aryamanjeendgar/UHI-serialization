@@ -128,9 +128,49 @@ def write_hdf5_schema(file_name, histograms: dict[str, bh.Histogram]) -> h5py.Fi
         f[group_prefix + '/axes'].attrs['description'] = "A list of the axes of the histogram."
         f[group_prefix + '/axes'].create_dataset('items', len(histogram.axes), dtype=h5py.special_dtype(ref=h5py.Reference))
         for i, axis in enumerate(histogram.axes):
-            tmp_axis = CONSTS['axes_dict'][str(axis)[: str(axis).index('(')]]
-            axes_path = group_prefix + '/ref_storage/{}_{}'.format(tmp_axis, i)
-            f[group_prefix + '/ref_storage'].create_group('{}_{}'.format(tmp_axis, i))
+            """Iterating through the axes, calling `create_axes_object` for each of them,
+            creating references to new groups and appending it to the `items` dataset defined above"""
+            current_axis = CONSTS['axes_dict'][str(axis)[: str(axis).index('(')]]
+            match current_axis:
+                case 'regular':
+                    args_dict = {}
+                    args_dict['bins'] = len(axis.edges) - 1
+                    args_dict['lower'] = axis.edges[0]
+                    args_dict['upper'] = axis.edges[-1]
+                    args_dict['underflow'] = axis.traits.underflow
+                    args_dict['overflow'] = axis.traits.overflow
+                    args_dict['circular'] = axis.traits.circular
+                    if axis.metadata is not None:
+                        args_dict['metadata'] = axis.metadata
+                        create_axes_object(current_axis, f, name, i, True, args_dict)
+                    else:
+                        create_axes_object(current_axis, f, name, i, False, args_dict)
+                case 'variable':
+                    args_dict = {}
+                    args_dict['edges'] = axis.edges
+                    args_dict['underflow'] = axis.traits.underflow
+                    args_dict['overflow'] = axis.traits.overflow
+                    args_dict['circular'] = axis.traits.circular
+                    if axis.metadata is not None:
+                        args_dict['metadata'] = axis.metadata
+                        create_axes_object(current_axis, f, name, i, True, args_dict)
+                    else:
+                        create_axes_object(current_axis, f, name, i, False, args_dict)
+                case 'boolean':
+                    args_dict = {}
+                    if axis.metadata is not None:
+                        args_dict['metadata'] = axis.metadata
+                        create_axes_object(current_axis, f, name, i, True, args_dict)
+                    else:
+                        create_axes_object(current_axis, f, name, i, False, args_dict)
+                case 'category_int':
+                    args_dict = {}
+                    args_dict['items'] = axis.
+                    pass
+                case 'category_str':
+                    pass
+            axes_path = group_prefix + '/ref_storage/{}_{}'.format(current_axis, i)
+            f[group_prefix + '/ref_storage'].create_group('{}_{}'.format(current_axis, i))
         """
         `axes` code end
         """
@@ -147,7 +187,7 @@ def write_hdf5_schema(file_name, histograms: dict[str, bh.Histogram]) -> h5py.Fi
 
 
 def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
-                       axis_num: int, has_metadata: bool, *args) -> h5py.File:
+                       axis_num: int, has_metadata: bool, args_dict, *args) -> h5py.File:
     """Helper function for constructing and adding a new axis in the /ref_storage subfolder inside
     /hist_name of the hdf5_ptr file"""
     hist_folder_storage = hdf5_ptr['/{}/ref_storage'.format(hist_name)]
@@ -157,15 +197,15 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
         case "regular":
             ref.attrs['type'] = axis_type
             ref.attrs['description'] = "An evenly spaced set of continuous bins."
-            ref.attrs['bins'] = args[0]
-            ref.attrs['lower'] = args[1]
-            ref.attrs['upper'] = args[2]
-            ref.attrs['underflow'] = args[3]
-            ref.attrs['overflow'] = args[4]
-            ref.attrs['circular'] = args[5]
+            ref.attrs['bins'] = args_dict['bins']
+            ref.attrs['lower'] = args_dict['lower']
+            ref.attrs['upper'] = args_dict['upper']
+            ref.attrs['underflow'] = args_dict['underflow']
+            ref.attrs['overflow'] = args_dict['overflow']
+            ref.attrs['circular'] = args_dict['circular']
             if has_metadata:
                 ref.create_group('metadata')
-                for (key, value) in args[6].items():
+                for (key, value) in args_dict['metadata'].items():
                     ref['/metadata'].attrs[key] = value
         case "variable":
             ref.attrs['type'] = axis_type
@@ -173,26 +213,24 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
             #HACK: requires `Variable` data is passed in as a
             # numpy array
             ref.create_dataset('axis_{}_edges'.format(axis_num),
-                               shape=args[0].shape, data=args[0])
-            ref.attrs['underflow'] = args[1]
-            ref.attrs['overflow'] = args[2]
-            ref.attrs['circular'] = args[3]
+                               shape=args_dict['edges'].shape, data=args_dict['edges'])
+            ref.attrs['underflow'] = args_dict['underflow']
+            ref.attrs['overflow'] = args_dict['overflow']
+            ref.attrs['circular'] = args_dict['circular']
             if has_metadata:
                 ref.create_group('metadata')
-                for (key, value) in args[4].items():
+                for (key, value) in args_dict['metadata'].items():
                     ref['/metadata'].attrs[key] = value
         case "boolean":
             ref.attrs['type'] = axis_type
             ref.attrs['description'] = "A simple true/false axis with no flow."
             if has_metadata:
                 ref.create_group('metadata')
-                for (key, value) in args[0].items():
+                for (key, value) in args_dict['metadata'].items():
                     ref['/metadata'].attrs[key] = value
-        case "str_category":
+        case "category_int":
             ref.attrs['type'] = axis_type
-            ref.attrs['description'] = "A set of string categorical bins."
-            #HACK: Assumes that the input is a numpy array of strings
-            # This is typically imposed via `dtype=object`
+            ref.attrs['description'] = "A set of integer categorical bins in any order."
             ref.create_dataset('axis_{}_categories'.format(axis_num),
                                shape=args[0].shape, data=args[0])
             ref.attrs['flow'] = args[1]
@@ -200,7 +238,7 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
                 ref.create_group('metadata')
                 for (key, value) in args[2].items():
                     ref['/metadata'].attrs[key] = value
-        case "int_category":
+        case "category_str":
             ref.attrs['type'] = axis_type
             ref.attrs['description'] = "A set of string categorical bins."
             #HACK: Assumes that the input is a numpy array of strings
