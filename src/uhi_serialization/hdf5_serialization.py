@@ -1,6 +1,8 @@
 import h5py
 import boost_histogram as bh
 from pathlib import Path
+import ast
+import numpy as np
 
 CONSTS = {
     'axes_dict': {
@@ -163,12 +165,17 @@ def write_hdf5_schema(file_name, histograms: dict[str, bh.Histogram]) -> h5py.Fi
                         create_axes_object(current_axis, f, name, i, True, args_dict)
                     else:
                         create_axes_object(current_axis, f, name, i, False, args_dict)
-                case 'category_int':
+                case 'category_int' | 'category_str':
                     args_dict = {}
-                    args_dict['items'] = axis.
-                    pass
-                case 'category_str':
-                    pass
+                    s = str(axis)
+                    args_dict['items'] = np.array(ast.literal_eval(s[s.find('['): s.find(']') + 1]),
+                                                  dtype=object)
+                    args_dict['flow'] = axis.traits.growth
+                    if axis.metadata is not None:
+                        args_dict['metadata'] = axis.metadata
+                        create_axes_object(current_axis, f, name, i, True, args_dict)
+                    else:
+                        create_axes_object(current_axis, f, name, i, False, args_dict)
             axes_path = group_prefix + '/ref_storage/{}_{}'.format(current_axis, i)
             f[group_prefix + '/ref_storage'].create_group('{}_{}'.format(current_axis, i))
         """
@@ -232,11 +239,11 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
             ref.attrs['type'] = axis_type
             ref.attrs['description'] = "A set of integer categorical bins in any order."
             ref.create_dataset('axis_{}_categories'.format(axis_num),
-                               shape=args[0].shape, data=args[0])
-            ref.attrs['flow'] = args[1]
+                               shape=args_dict['items'].shape, data=args_dict['items'])
+            ref.attrs['flow'] = args_dict['flow']
             if has_metadata:
                 ref.create_group('metadata')
-                for (key, value) in args[2].items():
+                for (key, value) in args_dict['metadata'].items():
                     ref['/metadata'].attrs[key] = value
         case "category_str":
             ref.attrs['type'] = axis_type
@@ -244,11 +251,11 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
             #HACK: Assumes that the input is a numpy array of strings
             # This is typically imposed via `dtype=object`
             ref.create_dataset('axis_{}_categories'.format(axis_num),
-                               shape=args[0].shape, data=args[0])
-            ref.attrs['flow'] = args[1]
+                               shape=args_dict['items'].shape, data=args_dict['items'])
+            ref.attrs['flow'] = args_dict['flow']
             if has_metadata:
                 ref.create_group('metadata')
-                for (key, value) in args[2].items():
+                for (key, value) in args_dict['metadata'].items():
                     ref['/metadata'].attrs[key] = value
     return hdf5_ptr
 
