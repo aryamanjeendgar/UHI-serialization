@@ -11,6 +11,13 @@ CONSTS = {
             "IntCategory": 'category_int',
             "StrCategory": 'category_str',
             "Boolean": 'boolean'
+    },
+    'storage_dict': {
+        'Int64': 'int_storage',
+        'Double': 'double_storage',
+        'Weight': 'weighted_storage',
+        'Mean': 'mean_storage',
+        'WeightedMean': 'weighted_mean_storage'
     }
 }
 
@@ -96,6 +103,30 @@ def write_hdf5_schema(file_name, histograms: dict[str, bh.Histogram]) -> h5py.Fi
         """
         f[group_prefix].create_group('storage')
         f[group_prefix + '/storage'].attrs['description'] = "The storage of the bins of the histogram."
+        hist_str_type = str(histogram.storage_type)
+        hist_str_type = hist_str_type[hist_str_type.find('e') + 2 : len(hist_str_type) - 2]
+        args_dict = {}
+        args_dict['items'] = histogram.values()
+        match hist_str_type:
+            case 'int_storage':
+                args_dict['values'] = np.array(histogram.values())
+            case 'double_storage':
+                args_dict['values'] = np.array(histogram.values())
+            case 'weighted_storage':
+                args_dict['values'] = np.array(histogram.values())
+                args_dict['variances'] = np.array(histogram.variances())
+            case 'mean_storage':
+                args_dict['values'] = np.array(histogram.values())
+                args_dict['variances'] = np.array(histogram.variances())
+                args_dict['count'] = np.array(histogram.counts())
+            case 'weighted_mean_storage':
+                args_dict['values'] = np.array(histogram.values())
+                args_dict['variances'] = np.array(histogram.variances())
+                f1 = lambda x: x.sum_of_weights
+                f2 = lambda x: x.sum_of_weights_squared
+                args_dict['sum_of_weights'] = np.array(list(map(f1, histogram)))
+                args_dict['sum_of_weights_squared'] = np.array(list(map(f2, histogram)))
+        create_storage_object(hist_str_type, f, name, args_dict)
         """
         `storage` code end
         """
@@ -166,6 +197,36 @@ def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
                 ref.create_group('metadata')
                 for (key, value) in args_dict['metadata'].items():
                     ref['/metadata'].attrs[key] = value
+    return hdf5_ptr
+
+
+def create_storage_object(storage_type: str, hdf5_ptr: h5py.File, hist_name: str,
+                          args_dict, *args) -> h5py.File:
+    """Helper function for constructing and storing the main data in the /ref_storage
+    subfolder inside /hist_name of the hdf5_ptr file"""
+    hist_folder_storage = hdf5_ptr['/{}/ref_storage'.format(hist_name)]
+    ref = hist_folder_storage.create_group('data')
+    ref.attrs['type'] = storage_type
+    ref.create_dataset('data', shape=args_dict['values'].shape, data=args_dict['values'])
+    storage_type = CONSTS['storage_dict'][storage_type]
+    match storage_type:
+        case "int_storage":
+            ref.attrs['description'] = "A storage holding integer counts."
+        case "double_storage":
+            ref.attrs['description'] = "A storage holding floating point counts."
+        case "weighted_storage":
+            ref.attrs['description'] = "A storage holding floating point counts and variances."
+            ref.create_dataset('variances', shape=args_dict['variances'].shape, data=args_dict['variances'])
+        case "mean_storage":
+            ref.attrs['description'] = "A storage holding 'profile'-style floating point counts, values, and variances."
+            ref.create_dataset('counts', shape=args_dict['counts'].shape, data=args_dict['counts'])
+            ref.create_dataset('variances', shape=args_dict['variances'].shape, data=args_dict['variances'])
+        case "weighted_mean_storage":
+            ref.attrs['description'] = "A storage holding 'profile'-style floating point ∑weights, ∑weights², values, and variances."
+            ref.create_dataset('variances', shape=args_dict['variances'].shape, data=args_dict['variances'])
+            ref.create_dataset('sum_of_weights', shape=args_dict['sum_of_weights'].shape, data=args_dict['sum_of_weights'])
+            ref.create_dataset('sum_of_weights_squared', shape=args_dict['sum_of_weights_squared'].shape, data=args_dict['sum_of_weights_squared'])
+
     return hdf5_ptr
 
 def read_hdf5_schema(input_file: h5py.File | Path) -> bh.Histogram:
