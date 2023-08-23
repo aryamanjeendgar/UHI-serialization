@@ -118,11 +118,11 @@ def write_hdf5_schema(file_name, histograms: dict[str, bh.Histogram]) -> h5py.Fi
     f.close()
     return f
 
-
 def read_hdf5_schema(input_file: h5py.File | Path) -> dict[str, bh.Histogram]:
     f = input_file
     if isinstance(input_file, Path):
         f = h5py.File(f)
+    op_dict = {}
     # The first level in the schema are the various histograms that have been serialized
     for hist_name in list(f.keys()):
         base_prefix = f"/{hist_name}"
@@ -197,11 +197,32 @@ def read_hdf5_schema(input_file: h5py.File | Path) -> dict[str, bh.Histogram]:
         #### `axes` code end
 
         #### `storage` code start
-
+        storage_ref = f[base_prefix + '/storage']
+        storage_type = storage_ref.attrs['type']
+        #NOTE: We construct the corresponding `bh.Histogram` object and assign the values
+        # from the serialization directly
+        h = bh.Histogram(*axes)
+        match storage_type:
+            case 'int_storage':
+                h[...] = np.array(storage_ref['data'])
+            case 'double_storage':
+                h[...] = np.array(storage_ref['data'])
+            case 'weighted_storage':
+                h[...] = np.stack([np.array(storage_ref['data']),
+                                   np.array(storage_ref['variances'])], axis=-1)
+            case 'mean_storage':
+                h[...] = np.stack([np.array(storage_ref['counts']),
+                                   np.array(storage_ref['data']),
+                                   np.array(storage_ref['variances'])], axis=-1)
+            case 'weighted_mean_storage':
+                h[...] = np.stack([np.array(storage_ref['sum_of_weights']),
+                                   np.array(storage_ref['sum_of_weights_squared']),
+                                   np.array(storage_ref['data']),
+                                   np.array(storage_ref['variances'])], axis=-1)
         #### `storage` code end
-    return {
-        "": bh.Histogram()
-    }
+
+        op_dict[hist_name] = h
+    return op_dict
 
 def create_axes_object(axis_type: str, hdf5_ptr: h5py.File, hist_name: str,
                        axis_num: int, has_metadata: bool, args_dict, *args) -> tuple[h5py.File, h5py.Reference]:
