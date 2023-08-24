@@ -18,6 +18,13 @@ CONSTS = {
         'Weight': 'weighted_storage',
         'Mean': 'mean_storage',
         'WeightedMean': 'weighted_mean_storage'
+    },
+    'storage_types_dict': {
+        'Int64': bh.storage.Int64(),
+        'Double': bh.storage.Double(),
+        'Weight': bh.storage.Weight(),
+        'Mean': bh.storage.Mean(),
+        'WeightedMean': bh.storage.WeightedMean()
     }
 }
 
@@ -144,7 +151,7 @@ def read_hdf5_schema(input_file: h5py.File | Path) -> dict[str, bh.Histogram]:
             #HACK: Force-adding the metadata field in `args_dict` allows me to avoid
             # making if-else test around the existence of metadata for the current axis
             args_dict['metadata'] = {}
-            for (key, value) in deref_axis_ref.attrs:
+            for (key, value) in deref_axis_ref.attrs.items():
                 args_dict[key] = value
             match axis_type:
                 case 'regular':
@@ -201,7 +208,8 @@ def read_hdf5_schema(input_file: h5py.File | Path) -> dict[str, bh.Histogram]:
         storage_type = storage_ref.attrs['type']
         #NOTE: We construct the corresponding `bh.Histogram` object and assign the values
         # from the serialization directly
-        h = bh.Histogram(*axes)
+        h = bh.Histogram(*axes, storage=CONSTS['storage_types_dict'][dict((v, k) for k, v in
+                                                                     CONSTS['storage_dict'].items())[storage_type]])
         match storage_type:
             case 'int_storage':
                 h[...] = np.array(storage_ref['data'])
