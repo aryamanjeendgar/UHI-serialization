@@ -111,7 +111,7 @@ def write_hdf5_schema(file_name, histograms: dict[str, bh.Histogram]) -> h5py.Fi
                 args_dict['variances'] = np.array(histogram.variances())
             case 'mean_storage':
                 args_dict['variances'] = np.array(histogram.variances())
-                args_dict['count'] = np.array(histogram.counts())
+                args_dict['counts'] = np.array(histogram.counts())
             case 'weighted_mean_storage':
                 args_dict['variances'] = np.array(histogram.variances())
                 f1 = lambda x: x.sum_of_weights

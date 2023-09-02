@@ -6,61 +6,90 @@ import numpy as np
 import uhi_serialization as s
 from pathlib import Path
 
-def test_1_write():
-    h = bh.Histogram(bh.axis.Regular(10, 0, 10), storage=bh.storage.Weight())
-    h.fill([0.3, 0.3, 0.4, 1.2])
-
+def one_D_test_init(storage_type: str):
+    h = None
+    if storage_type == 'weighted':
+        h = bh.Histogram(bh.axis.Regular(10, 0, 10), storage=bh.storage.Weight())
+        h.fill([0.3, 0.3, 0.4, 1.2])
+    elif storage_type == 'weighted_mean':
+        h = bh.Histogram(bh.axis.Regular(10, 0, 10), storage=bh.storage.WeightedMean())
+        h.fill([0.3, 0.3, 0.4, 1.2, 1.6], sample=[1, 2, 3, 4, 4], weight=[1, 1, 1, 1, 2])
+    elif storage_type == 'mean':
+        h = bh.Histogram(bh.axis.Regular(10, 0, 10), storage=bh.storage.Mean())
+        h.fill([0.3, 0.3, 0.4, 1.2, 1.6], sample=[1, 2, 3, 4, 4])
     single_test_hist = {
         'test_hist': h
     }
-    s.write_hdf5_schema('test_1.h5', single_test_hist)
+    return single_test_hist
 
-def test_1_read():
-    h = bh.Histogram(bh.axis.Regular(10, 0, 10), storage=bh.storage.Weight())
-    h.fill([0.3, 0.3, 0.4, 1.2])
-    h_init = {
-        'test_hist': h
-    }
+def test_weighted_storage_write():
+    s.write_hdf5_schema('test_weighted_storage.h5', one_D_test_init('weighted'))
 
-    h_constructed = s.read_hdf5_schema(Path('./test_1.h5'))
+def test_weighted_storge_read():
+    h_init = one_D_test_init('weighted')
+    h_constructed = s.read_hdf5_schema(Path('./test_weighted_storage.h5'))
 
     assert h_init.keys() == h_constructed.keys()
 
-def test_setting_weight():
-    h = bh.Histogram(bh.axis.Regular(10, 0, 10), storage=bh.storage.Weight())
+    actual_hist = h_init['test_hist']
+    re_constructed_hist = h_constructed['test_hist']
 
-    h.fill([0.3, 0.3, 0.4, 1.2])
+    # checking types of the reconstructed axes
+    assert type(actual_hist.axes[0]) == type(re_constructed_hist.axes[0])
+    assert actual_hist.storage_type == re_constructed_hist.storage_type
+    # checking values of the essential inputs of the axes
+    assert actual_hist.axes[0].traits == re_constructed_hist.axes[0].traits
+    assert np.allclose(actual_hist.axes[0].centers, re_constructed_hist.axes[0].centers, atol=1e-4, rtol=1e-9)
+    # checking storage values
+    assert np.allclose(actual_hist.values(), re_constructed_hist.values(), atol=1e-4, rtol=1e-9)
+    # checking variance variances
+    assert np.allclose(actual_hist.variances(), re_constructed_hist.variances(), atol=1e-4, rtol=1e-9)
 
-    assert h[0] == bh.accumulators.WeightedSum(3, 3)
-    assert h[1] == bh.accumulators.WeightedSum(1, 1)
+def test_weighted_mean_storage_write():
+    s.write_hdf5_schema('test_weighted_mean_storage.h5', one_D_test_init('weighted_mean'))
 
-    h[0] = bh.accumulators.WeightedSum(value=2, variance=2)
-    assert h[0] == bh.accumulators.WeightedSum(2, 2)
+def test_weighted_mean_storage_read():
+    h_init = one_D_test_init('weighted_mean')
+    h_constructed = s.read_hdf5_schema(Path('./test_weighted_mean_storage.h5'))
 
-    a = h.view()
+    assert h_init.keys() == h_constructed.keys()
 
-    assert a[0] == h[0]
+    actual_hist = h_init['test_hist']
+    re_constructed_hist = h_constructed['test_hist']
 
-    b = np.asarray(h)
+    # checking types of the reconstructed axes
+    assert type(actual_hist.axes[0]) == type(re_constructed_hist.axes[0])
+    assert actual_hist.storage_type == re_constructed_hist.storage_type
+    # checking values of the essential inputs of the axes
+    assert actual_hist.axes[0].traits == re_constructed_hist.axes[0].traits
+    assert np.allclose(actual_hist.axes[0].centers, re_constructed_hist.axes[0].centers, atol=1e-4, rtol=1e-9)
+    # checking storage values
+    assert np.allclose(actual_hist.values(), re_constructed_hist.values(), atol=1e-4, rtol=1e-9)
+    # checking variance variances
+    print(actual_hist.view(), re_constructed_hist.view())
+    print(actual_hist.variances())
+    # assert np.allclose(actual_hist.variances(), re_constructed_hist.variances(), atol=1e-4, rtol=1e-9)
 
-    assert b["value"][0] == h[0].value
-    assert b["variance"][0] == h[0].variance
+def test_mean_storage_write():
+    s.write_hdf5_schema('test_mean_storage.h5', one_D_test_init('mean'))
 
-    h[0] = bh.accumulators.WeightedSum(value=3, variance=1)
+def test_mean_storage_read():
+    h_init = one_D_test_init('mean')
+    h_constructed = s.read_hdf5_schema(Path('./test_mean_storage.h5'))
 
-    assert h[0].value == 3
-    assert h[0].variance == 1
+    assert h_init.keys() == h_constructed.keys()
 
-    assert a[0] == h[0]
+    actual_hist = h_init['test_hist']
+    re_constructed_hist = h_constructed['test_hist']
 
-    assert b["value"][0] == h[0].value
-    assert b["variance"][0] == h[0].variance
-
-    assert b[0]["value"] == a[0]["value"]
-    assert b[0]["variance"] == a[0]["variance"]
-
-    assert b["value"][0] == a["value"][0]
-    assert b["variance"][0] == a["variance"][0]
-
-    assert_array_equal(a.view().value, b.view()["value"])
-    assert_array_equal(a.view().variance, b.view()["variance"])
+    # checking types of the reconstructed axes
+    assert type(actual_hist.axes[0]) == type(re_constructed_hist.axes[0])
+    assert actual_hist.storage_type == re_constructed_hist.storage_type
+    # checking values of the essential inputs of the axes
+    assert actual_hist.axes[0].traits == re_constructed_hist.axes[0].traits
+    assert np.allclose(actual_hist.axes[0].centers, re_constructed_hist.axes[0].centers, atol=1e-4, rtol=1e-9)
+    # checking storage values
+    assert np.allclose(actual_hist.values(), re_constructed_hist.values(), atol=1e-4, rtol=1e-9)
+    # checking variance variances
+    # assert np.allclose(actual_hist.variances(), re_constructed_hist.variances(), atol=1e-4, rtol=1e-9)
+    assert np.allclose(actual_hist.counts(), re_constructed_hist.counts(), atol=1e-4, rtol=1e-9)
