@@ -57,6 +57,7 @@ repos:
         files: src|tests
         args: []
         additional_dependencies:
+          - boost-histogram
           - pytest
 
   - repo: https://github.com/codespell-project/codespell
