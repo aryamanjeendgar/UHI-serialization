@@ -78,28 +78,27 @@ def write_hdf5_schema(file_name: str, histograms: dict[str, bh.Histogram]) -> h5
             current_axis = AXIS_MAP[str(axis)[: str(axis).index("(")]]
             dataset = f[group_prefix + "/axes/items"]
             args_dict: dict[str, object] = {}
-            match current_axis:
-                case "regular":
-                    args_dict["bins"] = len(axis.edges) - 1
-                    args_dict["lower"] = axis.edges[0]
-                    args_dict["upper"] = axis.edges[-1]
-                    args_dict["underflow"] = axis.traits.underflow
-                    args_dict["overflow"] = axis.traits.overflow
-                    args_dict["circular"] = axis.traits.circular
-                case "variable":
-                    args_dict["edges"] = axis.edges
-                    args_dict["underflow"] = axis.traits.underflow
-                    args_dict["overflow"] = axis.traits.overflow
-                    args_dict["circular"] = axis.traits.circular
-                case "boolean":
-                    # NOTE: Boolean axes may only have `metadata` as user-input options
-                    pass
-                case "category_int" | "category_str":
-                    s = str(axis)
-                    args_dict["items"] = np.array(
-                        ast.literal_eval(s[s.find("[") : s.find("]") + 1]), dtype=object
-                    )
-                    args_dict["flow"] = axis.traits.growth
+            if current_axis == "regular":
+                args_dict["bins"] = len(axis.edges) - 1
+                args_dict["lower"] = axis.edges[0]
+                args_dict["upper"] = axis.edges[-1]
+                args_dict["underflow"] = axis.traits.underflow
+                args_dict["overflow"] = axis.traits.overflow
+                args_dict["circular"] = axis.traits.circular
+            elif current_axis == "variable":
+                args_dict["edges"] = axis.edges
+                args_dict["underflow"] = axis.traits.underflow
+                args_dict["overflow"] = axis.traits.overflow
+                args_dict["circular"] = axis.traits.circular
+            elif current_axis == "boolean":
+                # NOTE: Boolean axes may only have `metadata` as user-input options
+                pass
+            elif current_axis == "category_int" or current_axis == "category_str":
+                s = str(axis)
+                args_dict["items"] = np.array(
+                    ast.literal_eval(s[s.find("[") : s.find("]") + 1]), dtype=object
+                )
+                args_dict["flow"] = axis.traits.growth
 
             if axis.metadata is not None:
                 args_dict["metadata"] = axis.metadata
@@ -127,24 +126,23 @@ def write_hdf5_schema(file_name: str, histograms: dict[str, bh.Histogram]) -> h5
         ]
         args_dict = {}
         args_dict["values"] = np.array(histogram.values())
-        match hist_str_type:
-            case "int_storage":
-                # NOTE: `int_storage` only has the stored values
-                pass
-            case "double_storage":
-                # NOTE: `double_storage` only has the stored values
-                pass
-            case "weighted_storage":
-                args_dict["variances"] = np.array(histogram.variances())
-            case "mean_storage":
-                args_dict["variances"] = np.array(histogram.variances())
-                args_dict["counts"] = np.array(histogram.counts())
-            case "weighted_mean_storage":
-                view = histogram.view()
-                assert isinstance(view, bh._internal.view.WeightedMeanView)
-                args_dict["variances"] = np.array(histogram.variances())
-                args_dict["sum_of_weights"] = view.sum_of_weights
-                args_dict["sum_of_weights_squared"] = view.sum_of_weights_squared
+        if hist_str_type == "int_storage":
+            # NOTE: `int_storage` only has the stored values
+            pass
+        elif hist_str_type == "double_storage":
+            # NOTE: `double_storage` only has the stored values
+            pass
+        elif hist_str_type == "weighted_storage":
+            args_dict["variances"] = np.array(histogram.variances())
+        elif hist_str_type == "mean_storage":
+            args_dict["variances"] = np.array(histogram.variances())
+            args_dict["counts"] = np.array(histogram.counts())
+        elif hist_str_type == "weighted_mean_storage":
+            view = histogram.view()
+            assert isinstance(view, bh._internal.view.WeightedMeanView)
+            args_dict["variances"] = np.array(histogram.variances())
+            args_dict["sum_of_weights"] = view.sum_of_weights
+            args_dict["sum_of_weights_squared"] = view.sum_of_weights_squared
 
         create_storage_object(hist_str_type, f, name, args_dict)
         """
@@ -180,54 +178,53 @@ def read_hdf5_schema(input_file: h5py.File | Path) -> dict[str, bh.Histogram]:
             args_dict["metadata"] = {}
             for key, value in deref_axis_ref.attrs.items():
                 args_dict[key] = value
-            match axis_type:
-                case "regular":
-                    axes.append(
-                        bh.axis.Regular(
-                            args_dict["bins"],
-                            args_dict["lower"],
-                            args_dict["upper"],
-                            overflow=args_dict["overflow"],
-                            underflow=args_dict["underflow"],
-                            circular=args_dict["circular"],
-                            metadata=args_dict["metadata"],
-                        )
+            if axis_type == "regular":
+                axes.append(
+                    bh.axis.Regular(
+                        args_dict["bins"],
+                        args_dict["lower"],
+                        args_dict["upper"],
+                        overflow=args_dict["overflow"],
+                        underflow=args_dict["underflow"],
+                        circular=args_dict["circular"],
+                        metadata=args_dict["metadata"],
                     )
-                case "variable":
-                    args_dict["edges"] = np.array(deref_axis_ref[f"axis_{i}_edges"])
-                    axes.append(
-                        bh.axis.Variable(
-                            args_dict["edges"],
-                            underflow=args_dict["underflow"],
-                            overflow=args_dict["overflow"],
-                            circular=args_dict["circular"],
-                            metadata=args_dict["metadata"],
-                        )
+                )
+            elif axis_type == "variable":
+                args_dict["edges"] = np.array(deref_axis_ref[f"axis_{i}_edges"])
+                axes.append(
+                    bh.axis.Variable(
+                        args_dict["edges"],
+                        underflow=args_dict["underflow"],
+                        overflow=args_dict["overflow"],
+                        circular=args_dict["circular"],
+                        metadata=args_dict["metadata"],
                     )
-                case "boolean":
-                    axes.append(bh.axis.Boolean(metadata=args_dict["metadata"]))
-                case "category_int":
-                    args_dict["items"] = np.array(
-                        deref_axis_ref[f"axis_{i}_categories"]
+                )
+            elif axis_type == "boolean":
+                axes.append(bh.axis.Boolean(metadata=args_dict["metadata"]))
+            elif axis_type == "category_int":
+                args_dict["items"] = np.array(
+                    deref_axis_ref[f"axis_{i}_categories"]
+                )
+                axes.append(
+                    bh.axis.IntCategory(
+                        args_dict["items"],
+                        growth=args_dict["flow"],
+                        metadata=args_dict["metadata"],
                     )
-                    axes.append(
-                        bh.axis.IntCategory(
-                            args_dict["items"],
-                            growth=args_dict["flow"],
-                            metadata=args_dict["metadata"],
-                        )
+                )
+            elif axis_type == "category_str":
+                args_dict["items"] = np.array(
+                    deref_axis_ref[f"axis_{i}_categories"]
+                )
+                axes.append(
+                    bh.axis.IntCategory(
+                        args_dict["items"],
+                        growth=args_dict["flow"],
+                        metadata=args_dict["metadata"],
                     )
-                case "category_str":
-                    args_dict["items"] = np.array(
-                        deref_axis_ref[f"axis_{i}_categories"]
-                    )
-                    axes.append(
-                        bh.axis.IntCategory(
-                            args_dict["items"],
-                            growth=args_dict["flow"],
-                            metadata=args_dict["metadata"],
-                        )
-                    )
+                )
         #### `axes` code end
 
         #### `storage` code start
@@ -239,35 +236,34 @@ def read_hdf5_schema(input_file: h5py.File | Path) -> dict[str, bh.Histogram]:
             *axes,
             storage=STORAGE_TYPES[{v: k for k, v in STORAGE_MAP.items()}[storage_type]],
         )
-        match storage_type:
-            case "int_storage":
-                h[...] = np.array(storage_ref["data"])
-            case "double_storage":
-                h[...] = np.array(storage_ref["data"])
-            case "weighted_storage":
-                h[...] = np.stack(
-                    [np.array(storage_ref["data"]), np.array(storage_ref["variances"])],
-                    axis=-1,
-                )
-            case "mean_storage":
-                h[...] = np.stack(
-                    [
-                        np.array(storage_ref["counts"]),
-                        np.array(storage_ref["data"]),
-                        np.array(storage_ref["variances"]),
-                    ],
-                    axis=-1,
-                )
-            case "weighted_mean_storage":
-                h[...] = np.stack(
-                    [
-                        np.array(storage_ref["sum_of_weights"]),
-                        np.array(storage_ref["sum_of_weights_squared"]),
-                        np.array(storage_ref["data"]),
-                        np.array(storage_ref["variances"]),
-                    ],
-                    axis=-1,
-                )
+        if storage_type == "int_storage":
+            h[...] = np.array(storage_ref["data"])
+        elif storage_type == "double_storage":
+            h[...] = np.array(storage_ref["data"])
+        elif storage_type == "weighted_storage":
+            h[...] = np.stack(
+                [np.array(storage_ref["data"]), np.array(storage_ref["variances"])],
+                axis=-1,
+            )
+        elif storage_type == "mean_storage":
+            h[...] = np.stack(
+                [
+                    np.array(storage_ref["counts"]),
+                    np.array(storage_ref["data"]),
+                    np.array(storage_ref["variances"]),
+                ],
+                axis=-1,
+            )
+        elif storage_type == "weighted_mean_storage":
+            h[...] = np.stack(
+                [
+                    np.array(storage_ref["sum_of_weights"]),
+                    np.array(storage_ref["sum_of_weights_squared"]),
+                    np.array(storage_ref["data"]),
+                    np.array(storage_ref["variances"]),
+                ],
+                axis=-1,
+            )
         #### `storage` code end
 
         op_dict[hist_name] = h
@@ -286,72 +282,71 @@ def create_axes_object(
     /hist_name of the hdf5_ptr file"""
     hist_folder_storage = hdf5_ptr[f"/{hist_name}/ref_storage"]
     ref = hist_folder_storage.create_group(f"axis_{axis_num}")
-    match axis_type:
-        case "regular":
-            ref.attrs["type"] = axis_type
-            ref.attrs["description"] = "An evenly spaced set of continuous bins."
-            ref.attrs["bins"] = args_dict["bins"]
-            ref.attrs["lower"] = args_dict["lower"]
-            ref.attrs["upper"] = args_dict["upper"]
-            ref.attrs["underflow"] = args_dict["underflow"]
-            ref.attrs["overflow"] = args_dict["overflow"]
-            ref.attrs["circular"] = args_dict["circular"]
-            if has_metadata:
-                ref.create_group("metadata")
-                for key, value in args_dict["metadata"].items():
-                    ref["/metadata"].attrs[key] = value
-        case "variable":
-            ref.attrs["type"] = axis_type
-            ref.attrs["description"] = "A variably spaced set of continuous bins."
-            # HACK: requires `Variable` data is passed in as a
-            # numpy array
-            ref.create_dataset(
-                f"axis_{axis_num}_edges",
-                shape=args_dict["edges"].shape,
-                data=args_dict["edges"],
-            )
-            ref.attrs["underflow"] = args_dict["underflow"]
-            ref.attrs["overflow"] = args_dict["overflow"]
-            ref.attrs["circular"] = args_dict["circular"]
-            if has_metadata:
-                ref.create_group("metadata")
-                for key, value in args_dict["metadata"].items():
-                    ref["/metadata"].attrs[key] = value
-        case "boolean":
-            ref.attrs["type"] = axis_type
-            ref.attrs["description"] = "A simple true/false axis with no flow."
-            if has_metadata:
-                ref.create_group("metadata")
-                for key, value in args_dict["metadata"].items():
-                    ref["/metadata"].attrs[key] = value
-        case "category_int":
-            ref.attrs["type"] = axis_type
-            ref.attrs["description"] = "A set of integer categorical bins in any order."
-            ref.create_dataset(
-                f"axis_{axis_num}_categories",
-                shape=args_dict["items"].shape,
-                data=args_dict["items"],
-            )
-            ref.attrs["flow"] = args_dict["flow"]
-            if has_metadata:
-                ref.create_group("metadata")
-                for key, value in args_dict["metadata"].items():
-                    ref["/metadata"].attrs[key] = value
-        case "category_str":
-            ref.attrs["type"] = axis_type
-            ref.attrs["description"] = "A set of string categorical bins."
-            # HACK: Assumes that the input is a numpy array of strings
-            # This is typically imposed via `dtype=object`
-            ref.create_dataset(
-                f"axis_{axis_num}_categories",
-                shape=args_dict["items"].shape,
-                data=args_dict["items"],
-            )
-            ref.attrs["flow"] = args_dict["flow"]
-            if has_metadata:
-                ref.create_group("metadata")
-                for key, value in args_dict["metadata"].items():
-                    ref["/metadata"].attrs[key] = value
+    if axis_type ==  "regular":
+        ref.attrs["type"] = axis_type
+        ref.attrs["description"] = "An evenly spaced set of continuous bins."
+        ref.attrs["bins"] = args_dict["bins"]
+        ref.attrs["lower"] = args_dict["lower"]
+        ref.attrs["upper"] = args_dict["upper"]
+        ref.attrs["underflow"] = args_dict["underflow"]
+        ref.attrs["overflow"] = args_dict["overflow"]
+        ref.attrs["circular"] = args_dict["circular"]
+        if has_metadata:
+            ref.create_group("metadata")
+            for key, value in args_dict["metadata"].items():
+                ref["/metadata"].attrs[key] = value
+    elif axis_type == "variable":
+        ref.attrs["type"] = axis_type
+        ref.attrs["description"] = "A variably spaced set of continuous bins."
+        # HACK: requires `Variable` data is passed in as a
+        # numpy array
+        ref.create_dataset(
+            f"axis_{axis_num}_edges",
+            shape=args_dict["edges"].shape,
+            data=args_dict["edges"],
+        )
+        ref.attrs["underflow"] = args_dict["underflow"]
+        ref.attrs["overflow"] = args_dict["overflow"]
+        ref.attrs["circular"] = args_dict["circular"]
+        if has_metadata:
+            ref.create_group("metadata")
+            for key, value in args_dict["metadata"].items():
+                ref["/metadata"].attrs[key] = value
+    elif axis_type == "boolean":
+        ref.attrs["type"] = axis_type
+        ref.attrs["description"] = "A simple true/false axis with no flow."
+        if has_metadata:
+            ref.create_group("metadata")
+            for key, value in args_dict["metadata"].items():
+                ref["/metadata"].attrs[key] = value
+    elif axis_type == "category_int":
+        ref.attrs["type"] = axis_type
+        ref.attrs["description"] = "A set of integer categorical bins in any order."
+        ref.create_dataset(
+            f"axis_{axis_num}_categories",
+            shape=args_dict["items"].shape,
+            data=args_dict["items"],
+        )
+        ref.attrs["flow"] = args_dict["flow"]
+        if has_metadata:
+            ref.create_group("metadata")
+            for key, value in args_dict["metadata"].items():
+                ref["/metadata"].attrs[key] = value
+    elif axis_type == "category_str":
+        ref.attrs["type"] = axis_type
+        ref.attrs["description"] = "A set of string categorical bins."
+        # HACK: Assumes that the input is a numpy array of strings
+        # This is typically imposed via `dtype=object`
+        ref.create_dataset(
+            f"axis_{axis_num}_categories",
+            shape=args_dict["items"].shape,
+            data=args_dict["items"],
+        )
+        ref.attrs["flow"] = args_dict["flow"]
+        if has_metadata:
+            ref.create_group("metadata")
+            for key, value in args_dict["metadata"].items():
+                ref["/metadata"].attrs[key] = value
     return (hdf5_ptr, ref.ref)
 
 
@@ -366,50 +361,48 @@ def create_storage_object(
         "data", shape=args_dict["values"].shape, data=args_dict["values"]
     )
     # storage_type = STORAGE_MAP[storage_type]
-    match storage_type:
-        case "int_storage":
-            ref.attrs["description"] = "A storage holding integer counts."
-        case "double_storage":
-            ref.attrs["description"] = "A storage holding floating point counts."
-        case "weighted_storage":
-            ref.attrs[
-                "description"
-            ] = "A storage holding floating point counts and variances."
-            ref.create_dataset(
-                "variances",
-                shape=args_dict["variances"].shape,
-                data=args_dict["variances"],
-            )
-        case "mean_storage":
-            ref.attrs[
-                "description"
-            ] = "A storage holding 'profile'-style floating point counts, values, and variances."
-            ref.create_dataset(
-                "counts", shape=args_dict["counts"].shape, data=args_dict["counts"]
-            )
-            ref.create_dataset(
-                "variances",
-                shape=args_dict["variances"].shape,
-                data=args_dict["variances"],
-            )
-        case "weighted_mean_storage":
-            ref.attrs[
-                "description"
-            ] = "A storage holding 'profile'-style floating point ∑weights, ∑weights², values, and variances."
-            ref.create_dataset(
-                "variances",
-                shape=args_dict["variances"].shape,
-                data=args_dict["variances"],
-            )
-            ref.create_dataset(
-                "sum_of_weights",
-                shape=args_dict["sum_of_weights"].shape,
-                data=args_dict["sum_of_weights"],
-            )
-            ref.create_dataset(
-                "sum_of_weights_squared",
-                shape=args_dict["sum_of_weights_squared"].shape,
-                data=args_dict["sum_of_weights_squared"],
-            )
-
+    if storage_type == "int_storage":
+        ref.attrs["description"] = "A storage holding integer counts."
+    elif storage_type == "double_storage":
+        ref.attrs["description"] = "A storage holding floating point counts."
+    elif storage_type == "weighted_storage":
+        ref.attrs[
+            "description"
+        ] = "A storage holding floating point counts and variances."
+        ref.create_dataset(
+            "variances",
+            shape=args_dict["variances"].shape,
+            data=args_dict["variances"],
+        )
+    elif storage_type == "mean_storage":
+        ref.attrs[
+            "description"
+        ] = "A storage holding 'profile'-style floating point counts, values, and variances."
+        ref.create_dataset(
+            "counts", shape=args_dict["counts"].shape, data=args_dict["counts"]
+        )
+        ref.create_dataset(
+            "variances",
+            shape=args_dict["variances"].shape,
+            data=args_dict["variances"],
+        )
+    elif storage_type == "weighted_mean_storage":
+        ref.attrs[
+            "description"
+        ] = "A storage holding 'profile'-style floating point ∑weights, ∑weights², values, and variances."
+        ref.create_dataset(
+            "variances",
+            shape=args_dict["variances"].shape,
+            data=args_dict["variances"],
+        )
+        ref.create_dataset(
+            "sum_of_weights",
+            shape=args_dict["sum_of_weights"].shape,
+            data=args_dict["sum_of_weights"],
+        )
+        ref.create_dataset(
+            "sum_of_weights_squared",
+            shape=args_dict["sum_of_weights_squared"].shape,
+            data=args_dict["sum_of_weights_squared"],
+        )
     return hdf5_ptr
